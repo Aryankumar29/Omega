@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-header"><h2>API Keys & Configuration</h2></div>
+
+<form id="settings-form" onsubmit="saveSettings(event)">
+    <div class="grid-2col">
+        <div class="card">
+            <div class="card-header"><h3>API Keys</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Claude API Key</label>
+                    <input type="password" name="claude_api_key" value="{{ s.claude_api_key or '' }}" class="input-full" placeholder="sk-ant-...">
+                </div>
+                <div class="form-group">
+                    <label>Brave Search API Key</label>
+                    <input type="password" name="brave_api_key" value="{{ s.brave_api_key or '' }}" class="input-full">
+                </div>
+                <div class="form-group">
+                    <label>Snov.io Client ID</label>
+                    <input type="password" name="snov_client_id" value="{{ s.snov_client_id or '' }}" class="input-full">
+                </div>
+                <div class="form-group">
+                    <label>Snov.io Client Secret</label>
+                    <input type="password" name="snov_client_secret" value="{{ s.snov_client_secret or '' }}" class="input-full">
+                </div>
+                <div class="form-group">
+                    <label>Resend API Key</label>
+                    <input type="password" name="resend_api_key" value="{{ s.resend_api_key or '' }}" class="input-full" placeholder="re_...">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Email Configuration</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>From Email</label>
+                    <input type="email" name="resend_from_email" value="{{ s.resend_from_email or '' }}" class="input-full">
+                </div>
+                <div class="form-group">
+                    <label>Reply-To Email</label>
+                    <input type="email" name="reply_to_email" value="{{ s.reply_to_email or '' }}" class="input-full">
+                    <small class="text-muted">Replies tagged as yourname+{contactId}@gmail.com</small>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Default Sender Name</label>
+                        <input type="text" name="sender_name" value="{{ s.sender_name or '' }}" class="input-full">
+                        <small class="text-muted">Can be overridden per campaign</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Default Email Signature</label>
+                        <input type="text" name="email_signature" value="{{ s.email_signature or '' }}" class="input-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Pipeline Configuration</h3></div>
+            <div class="card-body">
+                <div class="form-group"><label>Ollama URL</label><input type="text" name="ollama_url" value="{{ s.ollama_url or 'http://127.0.0.1:11434/api/generate' }}" class="input-full"></div>
+                <div class="form-group"><label>Ollama Model</label><input type="text" name="ollama_model" value="{{ s.ollama_model or 'llama3.1:8b' }}" class="input-full"></div>
+                <div class="form-group"><label>Claude Model</label><input type="text" name="claude_model" value="{{ s.claude_model or 'claude-sonnet-4-20250514' }}" class="input-full"></div>
+                <div class="form-row">
+                    <div class="form-group"><label>Tier 1 Threshold</label><input type="number" name="tier1_threshold" value="{{ s.tier1_threshold or 70 }}" class="input-full" min="0" max="100"></div>
+                    <div class="form-group"><label>Tier 2 Threshold</label><input type="number" name="tier2_threshold" value="{{ s.tier2_threshold or 40 }}" class="input-full" min="0" max="100"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Follow-up Delay (days)</label><input type="number" name="followup_delay_days" value="{{ s.followup_delay_days or 3 }}" class="input-full"></div>
+                    <div class="form-group"><label>Max Follow-ups</label><input type="number" name="max_followups" value="{{ s.max_followups or 3 }}" class="input-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Reply Detection (IMAP)</h3></div>
+            <div class="card-body">
+                <p class="text-muted" style="margin-bottom:12px">Polls your inbox via IMAP to detect replies. Auto-checks every 5 min.</p>
+                <div class="form-group"><label>IMAP Host</label><input type="text" name="imap_host" value="{{ s.imap_host or '' }}" class="input-full" placeholder="imap.gmail.com"></div>
+                <div class="form-row">
+                    <div class="form-group"><label>IMAP Email</label><input type="email" name="imap_email" value="{{ s.imap_email or '' }}" class="input-full"></div>
+                    <div class="form-group"><label>IMAP Port</label><input type="number" name="imap_port" value="{{ s.imap_port or 993 }}" class="input-full"></div>
+                </div>
+                <div class="form-group"><label>IMAP Password / App Password</label><input type="password" name="imap_password" value="{{ s.imap_password or '' }}" class="input-full"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Google Calendar</h3></div>
+            <div class="card-body">
+                <div class="form-group"><label>Google Client ID</label><input type="password" name="google_client_id" value="{{ s.google_client_id or '' }}" class="input-full"></div>
+                <div class="form-group"><label>Google Client Secret</label><input type="password" name="google_client_secret" value="{{ s.google_client_secret or '' }}" class="input-full"></div>
+                <p class="text-muted">After saving, connect via Calendar page.</p>
+            </div>
+        </div>
+    </div>
+    <div class="form-actions" style="margin-top:20px">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save All Settings</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function saveSettings(e) {
+    e.preventDefault();
+    const data = {};
+    e.target.querySelectorAll('input, textarea, select').forEach(el => { if (el.name) data[el.name] = el.value; });
+    try {
+        const res = await fetch('/settings/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+        const result = await res.json();
+        if (res.ok && result.success) toast('Settings saved!', 'success');
+        else toast('Failed: ' + (result.error || 'Unknown'), 'error');
+    } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+</script>
+{% endblock %}

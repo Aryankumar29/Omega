@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — Settings{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2><a href="/campaigns" class="text-muted" style="text-decoration:none">&larr;</a> {{ campaign.name }}</h2>
+    <div class="header-actions">
+        <a href="/c/{{ campaign.id }}/" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+</div>
+
+<form id="campaign-form" onsubmit="saveCampaign(event)">
+    <div class="grid-2col">
+        <div class="card">
+            <div class="card-header"><h3>Campaign Info</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="name" value="{{ campaign.name }}" class="input-full" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="2" class="input-full">{{ campaign.description or '' }}</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select name="campaign_type" class="input-full" onchange="onTypeChange(this.value)">
+                            <option value="event" {% if campaign.campaign_type == 'event' %}selected{% endif %}>Event Outreach</option>
+                            <option value="cold" {% if campaign.campaign_type == 'cold' %}selected{% endif %}>Cold Outreach</option>
+                            <option value="nurture" {% if campaign.campaign_type == 'nurture' %}selected{% endif %}>Nurture</option>
+                            <option value="custom" {% if campaign.campaign_type == 'custom' %}selected{% endif %}>Custom</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status" class="input-full">
+                            <option value="active" {% if campaign.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="paused" {% if campaign.status == 'paused' %}selected{% endif %}>Paused</option>
+                            <option value="completed" {% if campaign.status == 'completed' %}selected{% endif %}>Completed</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>Email Settings</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Soft CTA</label>
+                    <textarea name="soft_cta" rows="3" class="input-full" placeholder="Your call-to-action line...">{{ campaign.soft_cta or '' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Banned Phrases (one per line)</label>
+                    <textarea name="banned_phrases" rows="4" class="input-full" placeholder="hope this finds you well&#10;just reaching out&#10;...">{{ campaign.banned_phrases or '' }}</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Sender Name</label>
+                        <input type="text" name="sender_name" value="{{ campaign.sender_name or '' }}" class="input-full" placeholder="Leave blank to use global setting">
+                    </div>
+                    <div class="form-group">
+                        <label>Email Signature</label>
+                        <input type="text" name="email_signature" value="{{ campaign.email_signature or '' }}" class="input-full" placeholder="Leave blank to use global setting">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Editor -->
+    <div class="card" style="margin-top:16px">
+        <div class="card-header">
+            <h3>Prompt Editor</h3>
+            <button type="button" class="btn btn-outline btn-sm" onclick="loadDefaults()"><i class="fas fa-undo"></i> Load Defaults for Type</button>
+        </div>
+        <div class="card-body">
+            <div class="tab-bar">
+                <button type="button" class="tab-btn active" onclick="switchPromptTab('outreach', this)">Outreach</button>
+                <button type="button" class="tab-btn" onclick="switchPromptTab('persona', this)">Persona</button>
+                <button type="button" class="tab-btn" onclick="switchPromptTab('enrichment', this)">Enrichment</button>
+                <button type="button" class="tab-btn" onclick="switchPromptTab('followup', this)">Follow-up</button>
+            </div>
+
+            <div class="prompt-tabs">
+                <div id="prompt-outreach" class="prompt-tab">
+                    <p class="text-muted">Controls how personalized emails and LinkedIn messages are generated. Must output JSON with: email_subject, email_body, linkedin_message</p>
+                    <textarea name="outreach_prompt" rows="15" class="input-full prompt-editor">{{ campaign.outreach_prompt or '' }}</textarea>
+                </div>
+                <div id="prompt-persona" class="prompt-tab hidden">
+                    <p class="text-muted">Controls buyer persona generation. Must output JSON with: persona_summary, goals_and_motivations, pain_points_and_challenges, personalization_hooks, confidence</p>
+                    <textarea name="persona_prompt" rows="15" class="input-full prompt-editor">{{ campaign.persona_prompt or '' }}</textarea>
+                </div>
+                <div id="prompt-enrichment" class="prompt-tab hidden">
+                    <p class="text-muted">Controls contact enrichment via Ollama. Must output JSON with: seniority_level, industry_vertical, company_size_estimate, relevance_score, inferred_pain_points, enrichment_confidence</p>
+                    <textarea name="enrichment_prompt" rows="15" class="input-full prompt-editor">{{ campaign.enrichment_prompt or '' }}</textarea>
+                </div>
+                <div id="prompt-followup" class="prompt-tab hidden">
+                    <p class="text-muted">Controls follow-up email generation. Must output JSON with: subject, body</p>
+                    <textarea name="followup_prompt" rows="15" class="input-full prompt-editor">{{ campaign.followup_prompt or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="prompt-help">
+                <strong>Available placeholders:</strong>
+                <code>{name}</code> <code>{company}</code> <code>{designation}</code> <code>{seniority_level}</code>
+                <code>{industry_vertical}</code> <code>{company_size_estimate}</code> <code>{linkedin_url}</code>
+                <code>{inferred_pain_points}</code> <code>{relevance_score}</code> <code>{persona}</code>
+                <code>{context_summary}</code> <code>{personalization_themes}</code> <code>{tier}</code>
+                <code>{tier_score}</code> <code>{soft_cta}</code> <code>{banned_phrases}</code>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions" style="margin-top:20px">
+        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Campaign</button>
+        <a href="/c/{{ campaign.id }}/" class="btn btn-outline btn-lg">Cancel</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const DEFAULT_PROMPTS = {{ default_prompts|tojson }};
+
+function switchPromptTab(tab, btn) {
+    document.querySelectorAll('.prompt-tab').forEach(el => el.classList.add('hidden'));
+    document.getElementById(`prompt-${tab}`).classList.remove('hidden');
+    document.querySelectorAll('.tab-bar .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function onTypeChange(type) {
+    if (confirm('Load default prompts for this campaign type? This will overwrite current prompts.')) {
+        loadDefaultsForType(type);
+    }
+}
+
+function loadDefaults() {
+    const type = document.querySelector('[name="campaign_type"]').value;
+    loadDefaultsForType(type);
+}
+
+function loadDefaultsForType(type) {
+    const prompts = DEFAULT_PROMPTS[type] || DEFAULT_PROMPTS['custom'];
+    document.querySelector('[name="outreach_prompt"]').value = prompts.outreach_prompt || '';
+    document.querySelector('[name="persona_prompt"]').value = prompts.persona_prompt || '';
+    document.querySelector('[name="enrichment_prompt"]').value = prompts.enrichment_prompt || '';
+    document.querySelector('[name="followup_prompt"]').value = prompts.followup_prompt || '';
+    toast('Default prompts loaded', 'success');
+}
+
+async function saveCampaign(e) {
+    e.preventDefault();
+    const data = {};
+    e.target.querySelectorAll('input, textarea, select').forEach(el => {
+        if (el.name) data[el.name] = el.value;
+    });
+    try {
+        const res = await fetch('/c/{{ campaign.id }}/update', {
+            method: 'PUT', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) toast('Campaign saved!', 'success');
+        else toast(result.error || 'Failed', 'error');
+    } catch (err) {
+        toast('Error: ' + err.message, 'error');
+    }
+}
+</script>
+{% endblock %}

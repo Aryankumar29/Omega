@@ -1,0 +1,15 @@
+# local data and secrets
+omega.db
+*.db
+*.db-wal
+*.db-shm
+uploads/
+.env
+token*.json
+credentials*.json
+
+# python
+__pycache__/
+*.pyc
+venv/
+.venv/

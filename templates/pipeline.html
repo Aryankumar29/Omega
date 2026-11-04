@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Pipeline</h2>
+</div>
+
+<div class="pipeline-config card">
+    <div class="card-header"><h3>Configure Pipeline Run</h3></div>
+    <div class="card-body">
+        <div class="pipeline-stages">
+            {% set stages = [
+                ('dedup', 'Deduplication', 'fas fa-clone', 'Remove duplicate contacts using fuzzy matching'),
+                ('enrichment', 'Enrichment', 'fas fa-database', 'Infer seniority, industry, company size via Ollama'),
+                ('linkedin', 'LinkedIn Lookup', 'fab fa-linkedin', 'Find LinkedIn profile URLs via Brave Search'),
+                ('persona', 'Persona Generation', 'fas fa-user-tie', 'Generate buyer personas via Claude API'),
+                ('segmentation', 'Segmentation', 'fas fa-layer-group', 'Score and assign tiers (T1/T2/T3)'),
+                ('email_finder', 'Email Finding', 'fas fa-at', 'Find emails via Snov.io + Brave Search'),
+                ('outreach', 'Outreach Generation', 'fas fa-pen-fancy', 'Generate personalized email copy')
+            ] %}
+            {% for key, label, icon, desc in stages %}
+            <div class="stage-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <i class="{{ icon }}"></i>
+                        <div><h4>{{ label }}</h4><p class="text-muted">{{ desc }}</p></div>
+                    </div>
+                    <div class="stage-control">
+                        <select id="config-{{ key }}" class="input-select">
+                            {% if key == 'dedup' %}
+                            <option value="always">Always Run</option>
+                            <option value="skip">Skip</option>
+                            {% else %}
+                            <option value="missing_only" selected>Run for Missing Only</option>
+                            <option value="all">Run for All (Regenerate)</option>
+                            <option value="skip">Skip</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="stage-stats"><span class="stat-mini" id="stat-{{ key }}"></span></div>
+                <div class="stage-progress hidden" id="progress-{{ key }}">
+                    <div class="progress-bar"><div class="progress-fill" id="fill-{{ key }}"></div></div>
+                    <span class="progress-text" id="ptext-{{ key }}">0/0</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="pipeline-target">
+            <h4>Target Contacts</h4>
+            <div class="target-options">
+                <label class="radio-card"><input type="radio" name="target" value="all" checked><span>All ({{ total_contacts }})</span></label>
+                <label class="radio-card"><input type="radio" name="target" value="tier1"><span>Tier 1</span></label>
+                <label class="radio-card"><input type="radio" name="target" value="tier2"><span>Tier 2</span></label>
+                <label class="radio-card"><input type="radio" name="target" value="tier3"><span>Tier 3</span></label>
+                <label class="radio-card"><input type="radio" name="target" value="unscored"><span>Unscored</span></label>
+            </div>
+        </div>
+
+        <div class="pipeline-actions">
+            <button class="btn btn-primary btn-lg" id="run-btn" onclick="runPipeline()"><i class="fas fa-play"></i> Run Pipeline</button>
+            <button class="btn btn-danger hidden" id="stop-btn" onclick="stopPipeline()"><i class="fas fa-stop"></i> Stop</button>
+        </div>
+    </div>
+</div>
+
+<div class="card hidden" id="pipeline-log-card">
+    <div class="card-header"><h3>Pipeline Log</h3><button class="btn btn-outline btn-sm" onclick="clearLog()">Clear</button></div>
+    <div class="card-body"><div class="log-container" id="pipeline-log"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CID = {{ campaign.id }};
+const STAGE_STATS = {{ stage_stats|tojson }};
+Object.keys(STAGE_STATS).forEach(key => { const el = document.getElementById(`stat-${key}`); if (el) el.textContent = STAGE_STATS[key]; });
+
+let currentRunId = null, pollInterval = null;
+
+async function runPipeline() {
+    const stages = {};
+    ['dedup','enrichment','linkedin','persona','segmentation','email_finder','outreach'].forEach(s => { stages[s] = document.getElementById(`config-${s}`).value; });
+    const target = document.querySelector('input[name="target"]:checked').value;
+    document.getElementById('run-btn').classList.add('hidden');
+    document.getElementById('stop-btn').classList.remove('hidden');
+    document.getElementById('pipeline-log-card').classList.remove('hidden');
+    document.querySelectorAll('.stage-progress').forEach(el => el.classList.remove('hidden'));
+    try {
+        const res = await fetch(`/c/${CID}/pipeline/run`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({stages, target}) });
+        const data = await res.json();
+        currentRunId = data.run_id;
+        pollInterval = setInterval(pollStatus, 1000);
+    } catch (e) { toast('Failed to start', 'error'); resetUI(); }
+}
+
+async function pollStatus() {
+    if (!currentRunId) return;
+    try {
+        const res = await fetch(`/c/${CID}/pipeline/status/${currentRunId}`);
+        const data = await res.json();
+        if (data.stage_progress) {
+            Object.entries(data.stage_progress).forEach(([stage, info]) => {
+                const fill = document.getElementById(`fill-${stage}`);
+                const text = document.getElementById(`ptext-${stage}`);
+                if (fill && info.total > 0) { fill.style.width = `${(info.done/info.total)*100}%`; text.textContent = `${info.done}/${info.total}`; }
+            });
+        }
+        if (data.new_logs) {
+            const logEl = document.getElementById('pipeline-log');
+            data.new_logs.forEach(log => {
+                const div = document.createElement('div');
+                div.className = `log-entry log-${log.status}`;
+                div.innerHTML = `<span class="log-time">${log.time}</span><span class="log-stage">${log.stage}</span><span class="log-name">${log.contact_name||''}</span><span class="log-msg">${log.message}</span>`;
+                logEl.appendChild(div);
+            });
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
+            clearInterval(pollInterval); resetUI();
+            toast(`Pipeline ${data.status}!`, data.status === 'completed' ? 'success' : 'error');
+        }
+    } catch (e) {}
+}
+
+function stopPipeline() { if (currentRunId) fetch(`/c/${CID}/pipeline/stop/${currentRunId}`, {method:'POST'}); clearInterval(pollInterval); resetUI(); }
+function resetUI() { document.getElementById('run-btn').classList.remove('hidden'); document.getElementById('stop-btn').classList.add('hidden'); currentRunId = null; }
+function clearLog() { document.getElementById('pipeline-log').innerHTML = ''; }
+</script>
+{% endblock %}

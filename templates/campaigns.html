@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Campaigns{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Campaigns</h2>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus"></i> New Campaign</button>
+    </div>
+</div>
+
+{% if campaigns %}
+<div class="campaigns-grid">
+    {% for c in campaigns %}
+    <a href="/c/{{ c.id }}/" class="campaign-card">
+        <div class="campaign-card-header">
+            <span class="campaign-type-badge type-{{ c.campaign_type }}">{{ c.campaign_type }}</span>
+            <span class="campaign-status {{ 'active' if c.status == 'active' else 'paused' }}">{{ c.status }}</span>
+        </div>
+        <h3>{{ c.name }}</h3>
+        <p class="text-muted">{{ c.description or 'No description' }}</p>
+        <div class="campaign-stats-row">
+            <span><i class="fas fa-users"></i> {{ c.contact_count or 0 }} contacts</span>
+            <span><i class="fas fa-paper-plane"></i> {{ c.sent_count or 0 }} sent</span>
+            <span><i class="fas fa-reply"></i> {{ c.reply_count or 0 }} replies</span>
+        </div>
+        <div class="campaign-footer">
+            <span class="text-muted">Created {{ c.created_at[:10] if c.created_at else '' }}</span>
+            <div class="campaign-actions" onclick="event.preventDefault();event.stopPropagation();">
+                <button class="btn-icon" title="Edit" onclick="location.href='/c/{{ c.id }}/edit'"><i class="fas fa-cog"></i></button>
+                <button class="btn-icon" title="Delete" onclick="deleteCampaign({{ c.id }}, '{{ c.name }}')"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <i class="fas fa-bullhorn"></i>
+    <h3>No campaigns yet</h3>
+    <p>Create your first campaign to start reaching out</p>
+    <button class="btn btn-primary btn-lg" onclick="showCreateModal()"><i class="fas fa-plus"></i> Create Campaign</button>
+</div>
+{% endif %}
+
+<template id="create-modal-tpl">
+    <div class="modal-inner">
+        <div class="modal-header">
+            <h3>New Campaign</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="create-form" onsubmit="createCampaign(event)">
+                <div class="form-group">
+                    <label>Campaign Name *</label>
+                    <input type="text" name="name" required placeholder="e.g. TechSparks 2025 Outreach">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="2" placeholder="Brief description of this campaign"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Campaign Type</label>
+                    <div class="type-cards">
+                        <label class="type-card selected" data-type="event">
+                            <input type="radio" name="campaign_type" value="event" checked>
+                            <i class="fas fa-calendar-alt"></i>
+                            <strong>Event Outreach</strong>
+                            <span>Conference, webinar, meetup</span>
+                        </label>
+                        <label class="type-card" data-type="cold">
+                            <input type="radio" name="campaign_type" value="cold">
+                            <i class="fas fa-snowflake"></i>
+                            <strong>Cold Outreach</strong>
+                            <span>Direct B2B prospecting</span>
+                        </label>
+                        <label class="type-card" data-type="nurture">
+                            <input type="radio" name="campaign_type" value="nurture">
+                            <i class="fas fa-seedling"></i>
+                            <strong>Nurture</strong>
+                            <span>Warm leads, relationship building</span>
+                        </label>
+                        <label class="type-card" data-type="custom">
+                            <input type="radio" name="campaign_type" value="custom">
+                            <i class="fas fa-pen"></i>
+                            <strong>Custom</strong>
+                            <span>Write your own prompts</span>
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg btn-full">Create Campaign</button>
+            </form>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.type-card').forEach(card => {
+    card.addEventListener('click', function() {
+        document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+        this.classList.add('selected');
+    });
+});
+
+function showCreateModal() {
+    const tpl = document.getElementById('create-modal-tpl');
+    showModal(tpl.innerHTML);
+    // Re-bind type card clicks in modal
+    document.querySelectorAll('.type-card').forEach(card => {
+        card.addEventListener('click', function() {
+            document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+            this.classList.add('selected');
+        });
+    });
+}
+
+async function createCampaign(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const data = Object.fromEntries(form);
+    const res = await fetch('/campaigns/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (result.success) location.href = `/c/${result.id}/edit`;
+    else toast(result.error || 'Failed', 'error');
+}
+
+async function deleteCampaign(id, name) {
+    if (!confirm(`Delete campaign "${name}" and ALL its contacts, emails, tracking data?`)) return;
+    const res = await fetch(`/c/${id}/delete`, {method: 'DELETE'});
+    if (res.ok) location.reload();
+    else toast('Failed to delete', 'error');
+}
+</script>
+{% endblock %}

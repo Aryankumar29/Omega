@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Omega{% endblock %} — Omega Outreach</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% if session.get('user_id') %}
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="/campaigns" style="text-decoration:none">
+                    <h1 class="logo">Omega</h1>
+                    <span class="logo-sub">Outreach Engine</span>
+                </a>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/campaigns" class="nav-item {% if not campaign %}active{% endif %}">
+                    <i class="fas fa-bullhorn"></i><span>All Campaigns</span>
+                </a>
+                {% if campaign %}
+                <div class="sidebar-campaign">
+                    <span class="campaign-label">{{ campaign.name }}</span>
+                </div>
+                <a href="/c/{{ campaign.id }}/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-chart-line"></i><span>Dashboard</span>
+                </a>
+                <a href="/c/{{ campaign.id }}/contacts" class="nav-item {% if active_page == 'contacts' %}active{% endif %}">
+                    <i class="fas fa-users"></i><span>Contacts</span>
+                </a>
+                <a href="/c/{{ campaign.id }}/pipeline" class="nav-item {% if active_page == 'pipeline' %}active{% endif %}">
+                    <i class="fas fa-cogs"></i><span>Pipeline</span>
+                </a>
+                <a href="/c/{{ campaign.id }}/emails/review" class="nav-item {% if active_page == 'email_review' %}active{% endif %}">
+                    <i class="fas fa-envelope-open-text"></i><span>Email Review</span>
+                </a>
+                <a href="/c/{{ campaign.id }}/send" class="nav-item {% if active_page == 'send_track' %}active{% endif %}">
+                    <i class="fas fa-paper-plane"></i><span>Send & Track</span>
+                </a>
+                <a href="/c/{{ campaign.id }}/calendar" class="nav-item {% if active_page == 'calendar' %}active{% endif %}">
+                    <i class="fas fa-calendar-alt"></i><span>Calendar</span>
+                </a>
+                <a href="/c/{{ campaign.id }}/edit" class="nav-item {% if active_page == 'campaign_edit' %}active{% endif %}">
+                    <i class="fas fa-sliders-h"></i><span>Campaign Settings</span>
+                </a>
+                {% endif %}
+                <div class="sidebar-divider"></div>
+                <a href="/settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
+                    <i class="fas fa-key"></i><span>API Keys & Config</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span>{{ session.get('username', 'User') }}</span>
+                </div>
+                <a href="{{ url_for('logout') }}" class="nav-item logout">
+                    <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">
+                    <span>{{ message }}</span>
+                    <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+    <div class="auth-layout">
+        {% block auth_content %}{% endblock %}
+    </div>
+    {% endif %}
+    <div id="toast-container"></div>
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div id="modal-content" class="modal-content"></div>
+    </div>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

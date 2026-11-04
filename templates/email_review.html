@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Email Review{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Email Review</h2>
+    <div class="header-actions">
+        <div class="view-toggle">
+            <button class="btn btn-outline active" id="btn-table" onclick="setView('table')"><i class="fas fa-table"></i> All</button>
+            <button class="btn btn-outline" id="btn-card" onclick="setView('card')"><i class="fas fa-id-card"></i> One by One</button>
+        </div>
+        <button class="btn btn-primary" onclick="bulkApprove()"><i class="fas fa-check-double"></i> Approve All Visible</button>
+    </div>
+</div>
+
+<div class="filters-bar">
+    <select id="review-tier-filter" class="input-select" onchange="applyFilters()">
+        <option value="">All Tiers</option>
+        <option value="Tier 1">Tier 1</option>
+        <option value="Tier 2">Tier 2</option>
+        <option value="Tier 3">Tier 3</option>
+    </select>
+    <select id="approval-filter" class="input-select" onchange="applyFilters()">
+        <option value="">All</option>
+        <option value="pending">Pending Review</option>
+        <option value="approved">Approved</option>
+    </select>
+</div>
+
+<div id="table-view" class="table-container">
+    <table class="data-table">
+        <thead><tr><th>Name</th><th>Company</th><th>Tier</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="review-tbody"></tbody>
+    </table>
+</div>
+
+<div id="card-view" class="hidden">
+    <div class="review-card-container">
+        <div class="review-card-sidebar">
+            <h4>Contact Details</h4>
+            <div id="card-contact-info"></div>
+        </div>
+        <div class="review-card-main">
+            <div class="review-card-nav">
+                <button class="btn btn-outline" onclick="prevEmail()"><i class="fas fa-arrow-left"></i> Prev</button>
+                <span id="card-counter">1 / 1</span>
+                <button class="btn btn-outline" onclick="nextEmail()">Next <i class="fas fa-arrow-right"></i></button>
+            </div>
+            <div class="review-card-type-tabs">
+                <button class="tab-btn active" data-type="email" onclick="switchEmailType('email', this)">Email</button>
+                <button class="tab-btn" data-type="linkedin" onclick="switchEmailType('linkedin', this)">LinkedIn</button>
+            </div>
+            <div class="email-preview">
+                <div class="email-subject-row"><label>Subject:</label><input type="text" id="edit-subject" class="input-full"></div>
+                <div class="email-body-edit"><textarea id="edit-body" rows="10"></textarea></div>
+                <div class="email-rendered" id="email-rendered"></div>
+            </div>
+            <div class="review-actions">
+                <button class="btn btn-success" onclick="approveEmail()"><i class="fas fa-check"></i> Approve</button>
+                <button class="btn btn-warning" onclick="regenerateEmail()"><i class="fas fa-sync"></i> Regenerate</button>
+                <button class="btn btn-secondary" onclick="saveEdit()"><i class="fas fa-save"></i> Save Edit</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CID = {{ campaign.id }};
+let emailData = {{ emails|tojson }};
+let filteredData = [...emailData];
+let currentIndex = 0, currentType = 'email', currentView = 'table';
+
+function setView(view) {
+    currentView = view;
+    document.getElementById('table-view').classList.toggle('hidden', view !== 'table');
+    document.getElementById('card-view').classList.toggle('hidden', view !== 'card');
+    document.getElementById('btn-table').classList.toggle('active', view === 'table');
+    document.getElementById('btn-card').classList.toggle('active', view === 'card');
+    if (view === 'card') renderCard();
+}
+
+function applyFilters() {
+    const tier = document.getElementById('review-tier-filter').value;
+    const approval = document.getElementById('approval-filter').value;
+    filteredData = emailData.filter(e => {
+        if (tier && e.tier !== tier) return false;
+        if (approval === 'pending' && e.email_approved) return false;
+        if (approval === 'approved' && !e.email_approved) return false;
+        return true;
+    });
+    currentIndex = 0; renderTable();
+    if (currentView === 'card') renderCard();
+}
+
+function renderTable() {
+    const tbody = document.getElementById('review-tbody');
+    tbody.innerHTML = filteredData.map((e, idx) => `<tr>
+        <td>${e.name}</td><td>${e.company||''}</td>
+        <td><span class="tier-badge tier-${(e.tier||'').toLowerCase().replace(' ','')}">${e.tier||'—'}</span></td>
+        <td class="subject-cell">${e.email_subject||'—'}</td>
+        <td>${e.email_approved ? '<span class="badge badge-green">Approved</span>' : '<span class="badge badge-yellow">Pending</span>'}</td>
+        <td><button class="btn-icon" onclick="currentIndex=${idx};setView('card')" title="Review"><i class="fas fa-eye"></i></button>
+        <button class="btn-icon" onclick="quickApprove(${e.id})"><i class="fas fa-check"></i></button></td>
+    </tr>`).join('');
+}
+
+function renderCard() {
+    if (!filteredData.length) { document.getElementById('card-contact-info').innerHTML = '<p>No emails to review</p>'; return; }
+    const e = filteredData[currentIndex];
+    document.getElementById('card-counter').textContent = `${currentIndex+1} / ${filteredData.length}`;
+    document.getElementById('card-contact-info').innerHTML = `
+        <div class="info-item"><label>Name</label><span>${e.name}</span></div>
+        <div class="info-item"><label>Company</label><span>${e.company||'—'}</span></div>
+        <div class="info-item"><label>Designation</label><span>${e.designation||'—'}</span></div>
+        <div class="info-item"><label>Tier</label><span class="tier-badge tier-${(e.tier||'').toLowerCase().replace(' ','')}">${e.tier||'—'}</span></div>
+        <div class="info-item"><label>Email</label><span>${e.email||'—'}</span></div>
+        <div class="info-item"><label>Persona</label><span>${e.persona||'—'}</span></div>`;
+    switchEmailType(currentType);
+}
+
+function switchEmailType(type, btn) {
+    currentType = type;
+    document.querySelectorAll('.review-card-type-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active'); else document.querySelector(`[data-type="${type}"]`)?.classList.add('active');
+    const e = filteredData[currentIndex]; if (!e) return;
+    if (type === 'email') {
+        document.getElementById('edit-subject').value = e.email_subject || '';
+        document.getElementById('edit-body').value = e.email_body || '';
+    } else {
+        document.getElementById('edit-subject').value = 'LinkedIn Message';
+        document.getElementById('edit-body').value = e.linkedin_message || '';
+    }
+    updateRendered();
+}
+
+function updateRendered() {
+    const e = filteredData[currentIndex];
+    const body = document.getElementById('edit-body').value;
+    const name = (e?.name||'').split(' ')[0];
+    document.getElementById('email-rendered').innerHTML = `<div style="font-family:Georgia,serif;font-size:14px;color:#333;max-width:600px;line-height:1.6;padding:20px;border:1px solid #e0e0e0;border-radius:8px;background:#fff"><p>Hi ${name},</p><p>${body.replace(/\n/g,'</p><p>')}</p><p>Best,<br>Your Name</p></div>`;
+}
+document.getElementById('edit-body')?.addEventListener('input', updateRendered);
+
+function prevEmail() { if (currentIndex > 0) { currentIndex--; renderCard(); } }
+function nextEmail() { if (currentIndex < filteredData.length-1) { currentIndex++; renderCard(); } }
+
+async function approveEmail() {
+    const e = filteredData[currentIndex];
+    const res = await fetch(`/c/${CID}/emails/approve/${e.id}`, {method:'PUT'});
+    if (res.ok) { toast('Approved!','success'); e.email_approved = true; renderTable(); nextEmail(); }
+}
+async function quickApprove(id) {
+    const res = await fetch(`/c/${CID}/emails/approve/${id}`, {method:'PUT'});
+    if (res.ok) { toast('Approved','success'); location.reload(); }
+}
+async function bulkApprove() {
+    const ids = filteredData.map(e => e.id);
+    const res = await fetch(`/c/${CID}/emails/approve-bulk`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})});
+    if (res.ok) { toast(`Approved ${ids.length}`,'success'); location.reload(); }
+}
+async function regenerateEmail() {
+    const e = filteredData[currentIndex]; toast('Regenerating...','info');
+    const res = await fetch(`/c/${CID}/emails/regenerate/${e.id}`, {method:'POST'});
+    if ((await res.json()).success) { toast('Done','success'); location.reload(); } else toast('Failed','error');
+}
+async function saveEdit() {
+    const e = filteredData[currentIndex];
+    const subject = document.getElementById('edit-subject').value;
+    const body = document.getElementById('edit-body').value;
+    const payload = currentType === 'email' ? {email_subject: subject, email_body: body} : {linkedin_message: body};
+    const res = await fetch(`/c/${CID}/emails/edit/${e.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    if (res.ok) { toast('Saved','success'); Object.assign(e, payload); }
+}
+
+applyFilters();
+</script>
+{% endblock %}

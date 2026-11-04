@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Calendar{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Calendar</h2>
+    <div class="header-actions">
+        {% if not gcal_connected %}
+        <a href="{{ url_for('calendar_auth') }}" class="btn btn-primary"><i class="fab fa-google"></i> Connect Google Calendar</a>
+        {% else %}
+        <span class="badge badge-green"><i class="fas fa-check"></i> Google Calendar Connected</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid-2col">
+    <div class="card">
+        <div class="card-header">
+            <h3>Upcoming Meetings</h3>
+        </div>
+        <div class="card-body">
+            {% if meetings %}
+            <div class="meetings-list">
+                {% for m in meetings %}
+                <div class="meeting-item">
+                    <div class="meeting-date">
+                        <span class="meeting-day">{{ m.datetime[:10] }}</span>
+                        <span class="meeting-time">{{ m.datetime[11:16] }}</span>
+                    </div>
+                    <div class="meeting-info">
+                        <h4>{{ m.title }}</h4>
+                        <span class="text-muted">{{ m.duration_minutes }} min — {{ m.contact_name }}</span>
+                        {% if m.meet_link %}
+                        <a href="{{ m.meet_link }}" target="_blank" class="btn btn-sm btn-outline"><i class="fas fa-video"></i> Join Meet</a>
+                        {% endif %}
+                    </div>
+                    <div class="meeting-status">
+                        <span class="badge badge-{{ 'green' if m.status == 'scheduled' else 'gray' }}">{{ m.status }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">No meetings scheduled yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Schedule New Meeting</h3>
+        </div>
+        <div class="card-body">
+            <form id="schedule-form" onsubmit="scheduleMeeting(event)">
+                <div class="form-group">
+                    <label>Contact</label>
+                    <select id="meeting-contact" name="contact_id" class="input-full" required>
+                        <option value="">Select a replied contact...</option>
+                        {% for c in replied_contacts %}
+                        <option value="{{ c.id }}">{{ c.name }} — {{ c.company }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="meeting-date" name="date" class="input-full" required onchange="loadSlots()">
+                </div>
+                <div class="form-group">
+                    <label>Available Slots</label>
+                    <div id="slots-container" class="slots-grid">
+                        <p class="text-muted">Select a date to see available slots</p>
+                    </div>
+                    <input type="hidden" id="meeting-time" name="time">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Duration</label>
+                        <select name="duration" class="input-full">
+                            <option value="15">15 minutes</option>
+                            <option value="30" selected>30 minutes</option>
+                            <option value="45">45 minutes</option>
+                            <option value="60">60 minutes</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" id="meeting-title" name="title" class="input-full" placeholder="Intro Call">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" name="add_meet" checked> Add Google Meet link</label>
+                </div>
+                <button type="submit" class="btn btn-primary" {% if not gcal_connected %}disabled title="Connect Google Calendar first"{% endif %}>
+                    <i class="fas fa-calendar-plus"></i> Schedule Meeting
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('meeting-contact')?.addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    const name = opt.textContent.split(' — ')[0].trim();
+    document.getElementById('meeting-title').value = `Intro call with ${name.split(' ')[0]}`;
+});
+
+async function loadSlots() {
+    const date = document.getElementById('meeting-date').value;
+    if (!date) return;
+    const container = document.getElementById('slots-container');
+    container.innerHTML = '<p>Loading...</p>';
+    try {
+        const res = await fetch(`/calendar/slots?date=${date}`);
+        const data = await res.json();
+        if (data.slots && data.slots.length > 0) {
+            container.innerHTML = data.slots.map(s =>
+                `<button type="button" class="slot-btn" onclick="selectSlot('${s}', this)">${s}</button>`
+            ).join('');
+        } else {
+            container.innerHTML = '<p class="text-muted">No available slots on this date</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p class="text-red">Failed to load slots</p>';
+    }
+}
+
+function selectSlot(time, btn) {
+    document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('meeting-time').value = time;
+}
+
+async function scheduleMeeting(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const data = Object.fromEntries(form);
+    if (!data.time) { toast('Please select a time slot', 'error'); return; }
+    data.add_meet = form.has('add_meet');
+    const res = await fetch('/calendar/schedule', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (result.success) {
+        toast('Meeting scheduled! Calendar invite sent.', 'success');
+        location.reload();
+    } else toast(result.error || 'Failed to schedule', 'error');
+}
+</script>
+{% endblock %}

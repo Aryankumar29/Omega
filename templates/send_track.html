@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Send & Track{% endblock %}
+{% block content %}
+<div class="page-header"><h2>Send & Track</h2></div>
+
+<div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('send', this)">Send Emails</button>
+    <button class="tab-btn" onclick="switchTab('tracking', this)">Tracking</button>
+    <button class="tab-btn" onclick="switchTab('followups', this)">Follow-ups</button>
+</div>
+
+<!-- Send Tab -->
+<div id="tab-send" class="tab-content">
+    <div class="card">
+        <div class="card-header"><h3>Outreach Emails</h3></div>
+        <div class="card-body">
+            <div class="send-stats">
+                <div class="send-stat"><span class="stat-value">{{ send_stats.ready }}</span><span>Ready to Send</span></div>
+                <div class="send-stat"><span class="stat-value">{{ send_stats.sent }}</span><span>Already Sent</span></div>
+            </div>
+            <div class="send-actions">
+                <button class="btn btn-primary" onclick="sendEmails()" {% if send_stats.ready == 0 %}disabled{% endif %}>
+                    <i class="fas fa-paper-plane"></i> Send All Now ({{ send_stats.ready }})
+                </button>
+                <button class="btn btn-secondary" onclick="toggleSchedulePanel('emails')" {% if send_stats.ready == 0 %}disabled{% endif %}>
+                    <i class="fas fa-clock"></i> Schedule Send
+                </button>
+                <button class="btn btn-outline" onclick="sendTestEmail()"><i class="fas fa-vial"></i> Send Test to Self</button>
+            </div>
+            <div id="schedule-emails-panel" class="schedule-panel hidden" style="margin-top:15px;padding:15px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color)">
+                <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+                    <div class="form-group" style="margin:0">
+                        <label>Date</label>
+                        <input type="date" id="schedule-emails-date" class="input-field" style="width:160px">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label>Time</label>
+                        <input type="time" id="schedule-emails-time" class="input-field" style="width:130px" value="09:00">
+                    </div>
+                    <button class="btn btn-primary" onclick="scheduleEmails()"><i class="fas fa-calendar-check"></i> Confirm Schedule</button>
+                    <button class="btn btn-outline" onclick="toggleSchedulePanel('emails')">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Scheduled Jobs -->
+    <div class="card" style="margin-top:20px">
+        <div class="card-header"><h3><i class="fas fa-clock"></i> Scheduled Jobs</h3></div>
+        <div class="card-body">
+            <div id="scheduled-jobs-list">
+                {% if scheduled_jobs %}
+                <table class="data-table">
+                    <thead><tr><th>Type</th><th>Scheduled For</th><th>Status</th><th>Details</th><th>Actions</th></tr></thead>
+                    <tbody>
+                    {% for j in scheduled_jobs %}
+                    <tr id="job-row-{{ j.id }}">
+                        <td>{% if j.job_type == 'send_emails' %}<span class="badge badge-blue">Outreach</span>{% else %}<span class="badge badge-yellow">Follow-ups</span>{% endif %}</td>
+                        <td>{{ j.scheduled_at }}</td>
+                        <td>{% if j.status == 'pending' %}<span class="badge badge-yellow">Pending</span>
+                            {% elif j.status == 'running' %}<span class="badge badge-blue">Running</span>
+                            {% elif j.status == 'completed' %}<span class="badge badge-green">Completed</span>
+                            {% else %}<span class="badge badge-red">{{ j.status }}</span>{% endif %}</td>
+                        <td class="text-muted">{{ j.result or '—' }}</td>
+                        <td>{% if j.status == 'pending' %}<button class="btn-icon" onclick="cancelJob({{ j.id }})" title="Cancel"><i class="fas fa-times"></i></button>{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No scheduled jobs.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <!-- Attachments -->
+    <div class="card" style="margin-top:20px">
+        <div class="card-header">
+            <h3><i class="fas fa-paperclip"></i> Attachments</h3>
+            <label class="btn btn-secondary btn-sm" style="margin:0;cursor:pointer">
+                <i class="fas fa-plus"></i> Add File
+                <input type="file" id="attachment-input" onchange="uploadAttachment()" hidden>
+            </label>
+        </div>
+        <div class="card-body">
+            <p class="text-muted" style="margin-bottom:12px">Files here will be attached to every email sent from this campaign. Max 10MB per file.</p>
+            <div id="attachment-list">
+                {% if attachments %}
+                {% for a in attachments %}
+                <div class="attachment-item" id="att-{{ loop.index }}">
+                    <div class="attachment-info">
+                        <i class="fas fa-file"></i>
+                        <span class="attachment-name">{{ a.name }}</span>
+                        <span class="text-muted">({{ a.size_kb }} KB)</span>
+                    </div>
+                    <button class="btn-icon" onclick="deleteAttachment('{{ a.name }}', 'att-{{ loop.index }}')" title="Remove"><i class="fas fa-trash"></i></button>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted" id="no-attachments">No attachments. Emails will be sent without files.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+        <div class="card-header"><h3>Send Log</h3></div>
+        <div class="card-body"><div class="log-container" id="send-log"><p class="text-muted">No emails sent yet in this session.</p></div></div>
+    </div>
+</div>
+
+<!-- Tracking Tab -->
+<div id="tab-tracking" class="tab-content hidden">
+    <div class="filters-bar" style="margin-bottom:16px">
+        <button class="btn btn-primary" id="refresh-btn" onclick="refreshTracking()"><i class="fas fa-sync"></i> Refresh Tracking</button>
+        <span class="text-muted" id="refresh-status">Auto-refreshes every 5 min</span>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-info"><span class="stat-value">{{ tracking_stats.sent }}</span><span class="stat-label">Sent</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-value">{{ tracking_stats.delivered }}</span><span class="stat-label">Delivered</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-value">{{ tracking_stats.opened }}</span><span class="stat-label">Opened</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-value">{{ tracking_stats.replied }}</span><span class="stat-label">Replied</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-value text-red">{{ tracking_stats.bounced }}</span><span class="stat-label">Bounced</span></div></div>
+    </div>
+    <div class="table-container" style="margin-top:20px">
+        <table class="data-table">
+            <thead><tr><th>Contact</th><th>Subject</th><th>Sent</th><th>Status</th><th>Opens</th><th>Replied</th></tr></thead>
+            <tbody>
+                {% for t in tracking %}
+                <tr>
+                    <td>{{ t.contact_name }}</td>
+                    <td class="subject-cell">{{ t.subject }}</td>
+                    <td>{{ t.sent_at or '—' }}</td>
+                    <td>{% if t.status == 'replied' %}<span class="badge badge-green">Replied</span>
+                        {% elif t.status == 'opened' %}<span class="badge badge-blue">Opened</span>
+                        {% elif t.status == 'delivered' %}<span class="badge badge-gray">Delivered</span>
+                        {% elif t.status == 'bounced' %}<span class="badge badge-red">Bounced</span>
+                        {% else %}<span class="badge badge-yellow">{{ t.status }}</span>{% endif %}</td>
+                    <td>{{ t.open_count or 0 }}</td>
+                    <td>{% if t.replied_at %}<span class="text-green">Yes</span>
+                        <button class="btn-icon" onclick="viewReply({{ t.id }})"><i class="fas fa-eye"></i></button>
+                        {% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Follow-ups Tab -->
+<div id="tab-followups" class="tab-content hidden">
+    <div class="card">
+        <div class="card-header">
+            <h3>Follow-up Candidates</h3>
+            <div style="display:flex;align-items:center;gap:10px">
+                <span class="text-muted">No reply after {{ followup_delay }} days</span>
+                {% if followup_candidates %}
+                <button class="btn btn-secondary btn-sm" onclick="toggleSchedulePanel('followups')"><i class="fas fa-clock"></i> Schedule All Follow-ups</button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="schedule-followups-panel" class="schedule-panel hidden" style="margin-bottom:15px;padding:15px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color)">
+                <p style="margin:0 0 10px 0">Auto-generate and send follow-ups to all {{ followup_candidates|length }} candidates at the scheduled time.</p>
+                <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+                    <div class="form-group" style="margin:0">
+                        <label>Date</label>
+                        <input type="date" id="schedule-followups-date" class="input-field" style="width:160px">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label>Time</label>
+                        <input type="time" id="schedule-followups-time" class="input-field" style="width:130px" value="09:00">
+                    </div>
+                    <button class="btn btn-primary" onclick="scheduleFollowups()"><i class="fas fa-calendar-check"></i> Confirm Schedule</button>
+                    <button class="btn btn-outline" onclick="toggleSchedulePanel('followups')">Cancel</button>
+                </div>
+            </div>
+            {% if followup_candidates %}
+            <table class="data-table">
+                <thead><tr><th>Contact</th><th>Company</th><th>Last Sent</th><th>Days Ago</th><th>Opens</th><th>Follow-up #</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {% for f in followup_candidates %}
+                    <tr id="followup-row-{{ f.contact_id }}">
+                        <td>{{ f.contact_name }}</td><td>{{ f.company }}</td><td>{{ f.last_sent }}</td><td>{{ f.days_ago }}</td><td>{{ f.open_count }}</td>
+                        <td>{{ f.next_followup_num }} of {{ max_followups }}</td>
+                        <td><button class="btn btn-sm btn-primary" onclick="generateFollowup({{ f.contact_id }})"><i class="fas fa-pen"></i> Generate</button>
+                        <button class="btn btn-sm btn-outline" onclick="document.getElementById('followup-row-{{ f.contact_id }}').style.display='none'">Skip</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted">No contacts eligible for follow-up right now.</p>{% endif %}
+        </div>
+    </div>
+    <div class="card hidden" id="followup-preview-card" style="margin-top:20px">
+        <div class="card-header"><h3>Follow-up Preview</h3><span id="followup-for"></span></div>
+        <div class="card-body">
+            <div class="form-group"><label>Subject</label><input type="text" id="followup-subject" class="input-full"></div>
+            <div class="form-group"><label>Body</label><textarea id="followup-body" rows="6" class="input-full"></textarea></div>
+            <div class="email-rendered" id="followup-rendered"></div>
+            <div class="review-actions" style="margin-top:15px">
+                <button class="btn btn-success" onclick="sendFollowup()"><i class="fas fa-paper-plane"></i> Send Follow-up (Same Thread)</button>
+                <button class="btn btn-warning" onclick="regenerateFollowup()"><i class="fas fa-sync"></i> Regenerate</button>
+                <button class="btn btn-outline" onclick="document.getElementById('followup-preview-card').classList.add('hidden')">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CID = {{ campaign.id }};
+let currentFollowupContactId = null;
+
+async function uploadAttachment() {
+    const input = document.getElementById('attachment-input');
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast('File too large (max 10MB)', 'error'); return; }
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch(`/c/${CID}/attachments/upload`, {method: 'POST', body: formData});
+        const data = await res.json();
+        if (data.success) {
+            toast(`Attached: ${data.name}`, 'success');
+            location.reload();
+        } else toast(data.error || 'Failed', 'error');
+    } catch (e) { toast('Upload failed', 'error'); }
+    input.value = '';
+}
+
+async function deleteAttachment(filename, elemId) {
+    if (!confirm(`Remove ${filename}?`)) return;
+    const res = await fetch(`/c/${CID}/attachments/delete`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename})
+    });
+    if (res.ok) { document.getElementById(elemId).remove(); toast('Removed', 'success'); }
+}
+
+async function refreshTracking() {
+    const btn = document.getElementById('refresh-btn');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+    try {
+        const res = await fetch('/send/tracking-updates');
+        const data = await res.json();
+        let msg = [];
+        if (data.resend?.updated > 0) msg.push(`${data.resend.updated} delivery updates`);
+        if (data.imap?.found > 0) msg.push(`${data.imap.found} new replies`);
+        if (msg.length) { toast(msg.join(', '), 'success'); setTimeout(() => location.reload(), 1500); }
+        else toast('No new updates', 'info');
+        document.getElementById('refresh-status').textContent = `Last: ${new Date().toLocaleTimeString()}`;
+    } catch (e) { toast('Failed', 'error'); }
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync"></i> Refresh Tracking';
+}
+
+function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    document.querySelectorAll('.tab-bar .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+async function sendEmails() {
+    if (!confirm('Send all approved emails?')) return;
+    const logEl = document.getElementById('send-log'); logEl.innerHTML = '<p>Starting...</p>';
+    const res = await fetch(`/c/${CID}/send/emails`, {method: 'POST'});
+    const reader = res.body.getReader(); const decoder = new TextDecoder();
+    while (true) {
+        const {value, done} = await reader.read(); if (done) break;
+        decoder.decode(value).split('\n').filter(l => l.startsWith('data:')).forEach(line => {
+            const data = JSON.parse(line.slice(5));
+            const div = document.createElement('div'); div.className = `log-entry log-${data.status}`;
+            div.innerHTML = `<span class="log-time">${data.time}</span><span class="log-name">${data.name}</span><span class="log-msg">${data.message}</span>`;
+            logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight;
+        });
+    }
+    toast('Done', 'success');
+}
+
+async function sendTestEmail() {
+    toast('Sending test...', 'info');
+    const res = await fetch(`/c/${CID}/send/test`, {method: 'POST'});
+    const data = await res.json();
+    if (data.success) toast('Test sent!', 'success'); else toast(data.error || 'Failed', 'error');
+}
+
+function toggleSchedulePanel(type) {
+    const panel = document.getElementById(`schedule-${type}-panel`);
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById(`schedule-${type}-date`).value = tomorrow.toISOString().split('T')[0];
+    }
+}
+
+async function scheduleEmails() {
+    const date = document.getElementById('schedule-emails-date').value;
+    const time = document.getElementById('schedule-emails-time').value;
+    if (!date || !time) { toast('Pick a date and time', 'error'); return; }
+    const res = await fetch(`/c/${CID}/send/schedule`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({scheduled_at: `${date}T${time}`})
+    });
+    const data = await res.json();
+    if (data.success) { toast(`Scheduled ${data.count} emails for ${date} ${time}`, 'success'); location.reload(); }
+    else toast(data.error || 'Failed', 'error');
+}
+
+async function scheduleFollowups() {
+    const date = document.getElementById('schedule-followups-date').value;
+    const time = document.getElementById('schedule-followups-time').value;
+    if (!date || !time) { toast('Pick a date and time', 'error'); return; }
+    const res = await fetch(`/c/${CID}/send/schedule-followups`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({scheduled_at: `${date}T${time}`})
+    });
+    const data = await res.json();
+    if (data.success) { toast(`Scheduled follow-ups for ${data.count} contacts at ${date} ${time}`, 'success'); location.reload(); }
+    else toast(data.error || 'Failed', 'error');
+}
+
+async function cancelJob(jobId) {
+    if (!confirm('Cancel this scheduled job?')) return;
+    const res = await fetch(`/c/${CID}/send/scheduled-jobs/${jobId}`, {method: 'DELETE'});
+    if (res.ok) { toast('Cancelled', 'success'); document.getElementById(`job-row-${jobId}`).remove(); }
+}
+
+async function generateFollowup(contactId) {
+    currentFollowupContactId = contactId; toast('Generating...', 'info');
+    const res = await fetch(`/c/${CID}/send/followup/generate/${contactId}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.success) {
+        document.getElementById('followup-subject').value = data.subject;
+        document.getElementById('followup-body').value = data.body;
+        document.getElementById('followup-for').textContent = data.contact_name;
+        document.getElementById('followup-preview-card').classList.remove('hidden');
+    } else toast(data.error || 'Failed', 'error');
+}
+
+async function sendFollowup() {
+    if (!currentFollowupContactId) return;
+    const res = await fetch(`/c/${CID}/send/followup/${currentFollowupContactId}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({subject: document.getElementById('followup-subject').value, body: document.getElementById('followup-body').value})
+    });
+    if ((await res.json()).success) { toast('Follow-up sent!', 'success'); location.reload(); } else toast('Failed', 'error');
+}
+
+function regenerateFollowup() { if (currentFollowupContactId) generateFollowup(currentFollowupContactId); }
+
+async function viewReply(trackingId) {
+    const res = await fetch(`/c/${CID}/send/reply/${trackingId}`);
+    const data = await res.json();
+    showModal(`<div class="modal-inner"><div class="modal-header"><h3>Reply from ${data.contact_name}</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+        <div class="modal-body"><pre class="reply-content">${data.reply_content||'No content'}</pre>
+        <div style="margin-top:15px"><a href="/c/${CID}/calendar" class="btn btn-primary"><i class="fas fa-calendar"></i> Schedule Meeting</a></div></div></div>`);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>{{ campaign.name }}</h2>
+    <div class="header-actions">
+        <span class="campaign-type-badge type-{{ campaign.campaign_type }}">{{ campaign.campaign_type }}</span>
+        <a href="/c/{{ campaign.id }}/contacts" class="btn btn-secondary"><i class="fas fa-upload"></i> Upload Contacts</a>
+        <a href="/c/{{ campaign.id }}/pipeline" class="btn btn-primary"><i class="fas fa-play"></i> Run Pipeline</a>
+    </div>
+</div>
+
+{% if campaign.description %}
+<p class="text-muted" style="margin-bottom:20px">{{ campaign.description }}</p>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-users"></i></div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.total_contacts }}</span>
+            <span class="stat-label">Total Contacts</span>
+        </div>
+    </div>
+    <div class="stat-card tier1">
+        <div class="stat-icon"><i class="fas fa-star"></i></div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.tier1 }}</span>
+            <span class="stat-label">Tier 1</span>
+        </div>
+    </div>
+    <div class="stat-card tier2">
+        <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.tier2 }}</span>
+            <span class="stat-label">Tier 2</span>
+        </div>
+    </div>
+    <div class="stat-card tier3">
+        <div class="stat-icon"><i class="fas fa-layer-group"></i></div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.tier3 }}</span>
+            <span class="stat-label">Tier 3</span>
+        </div>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-database"></i></div>
+        <div class="stat-info"><span class="stat-value">{{ stats.enriched }}</span><span class="stat-label">Enriched</span></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-at"></i></div>
+        <div class="stat-info"><span class="stat-value">{{ stats.emails_found }}</span><span class="stat-label">Emails Found</span></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-pen-fancy"></i></div>
+        <div class="stat-info"><span class="stat-value">{{ stats.outreach_generated }}</span><span class="stat-label">Outreach Generated</span></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-paper-plane"></i></div>
+        <div class="stat-info"><span class="stat-value">{{ stats.emails_sent }}</span><span class="stat-label">Emails Sent</span></div>
+    </div>
+</div>
+
+<div class="grid-2col">
+    <div class="card">
+        <div class="card-header"><h3>Pipeline Status</h3></div>
+        <div class="card-body">
+            <div class="pipeline-mini">
+                <div class="pipe-stage"><div class="pipe-bar" style="width: {{ stats.enrichment_pct }}%"></div><span>Enrichment — {{ stats.enriched }}/{{ stats.total_contacts }}</span></div>
+                <div class="pipe-stage"><div class="pipe-bar" style="width: {{ stats.linkedin_pct }}%"></div><span>LinkedIn — {{ stats.linkedin_found }}/{{ stats.total_contacts }}</span></div>
+                <div class="pipe-stage"><div class="pipe-bar" style="width: {{ stats.persona_pct }}%"></div><span>Personas — {{ stats.personas_generated }}/{{ stats.total_contacts }}</span></div>
+                <div class="pipe-stage"><div class="pipe-bar" style="width: {{ stats.email_pct }}%"></div><span>Emails Found — {{ stats.emails_found }}/{{ stats.total_contacts }}</span></div>
+                <div class="pipe-stage"><div class="pipe-bar" style="width: {{ stats.outreach_pct }}%"></div><span>Outreach — {{ stats.outreach_generated }}/{{ stats.total_contacts }}</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>Email Tracking</h3></div>
+        <div class="card-body">
+            <div class="tracking-summary">
+                <div class="track-item"><span class="track-label">Sent</span><span class="track-value">{{ stats.emails_sent }}</span></div>
+                <div class="track-item"><span class="track-label">Delivered</span><span class="track-value">{{ stats.delivered }}</span></div>
+                <div class="track-item"><span class="track-label">Opened</span><span class="track-value">{{ stats.opened }}</span></div>
+                <div class="track-item"><span class="track-label">Replied</span><span class="track-value">{{ stats.replied }}</span></div>
+                <div class="track-item"><span class="track-label">Bounced</span><span class="track-value text-red">{{ stats.bounced }}</span></div>
+                <div class="track-item"><span class="track-label">Follow-ups Sent</span><span class="track-value">{{ stats.followups_sent }}</span></div>
+                <div class="track-item"><span class="track-label">Meetings Scheduled</span><span class="track-value text-green">{{ stats.meetings_scheduled }}</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
